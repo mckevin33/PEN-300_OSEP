@@ -1,0 +1,11 @@
+*.exe
+*.bin
+*.rc
+*.vba
+*.ps1
+*.lnk
+*_Loader.cs
+__pycache__/
+*.pyc
+/tmp/
+.venv/
