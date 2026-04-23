@@ -21,7 +21,17 @@ WXS_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
                  InstallScope="perMachine"
                  Description="{product_name} Installer" />
 
-        <MediaTemplate EmbedCab="yes" />
+        <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Component Id="DummyComponent" Guid="{component_guid}">
+                <CreateFolder />
+            </Component>
+        </Directory>
+
+        <Feature Id="DummyFeature" Title="Main" Level="1">
+            <ComponentRef Id="DummyComponent" />
+        </Feature>
 
         <Binary Id="payload" SourceFile="{exe_source}" />
 
@@ -35,8 +45,6 @@ WXS_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
         <InstallExecuteSequence>
             <Custom Action="RunPayload" After="InstallInitialize" />
         </InstallExecuteSequence>
-
-        <Directory Id="TARGETDIR" Name="SourceDir" />
     </Product>
 </Wix>
 """
@@ -56,11 +64,13 @@ def build_msi(exe_path: Path, output_msi: Path,
         sys.exit(f"[-] EXE not found: {exe_path}")
 
     upgrade_code = str(uuid.uuid4()).upper()
+    component_guid = str(uuid.uuid4()).upper()
 
     wxs = WXS_TEMPLATE.format(
         product_name=product_name,
         manufacturer=manufacturer,
         upgrade_code=upgrade_code,
+        component_guid=component_guid,
         exe_source=str(exe_path.resolve()),
     )
 
