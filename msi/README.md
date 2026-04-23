@@ -86,9 +86,11 @@ after `InstallFiles` that launches the EXE via `cmd.exe /c start`:
     <File Id="payloadFile" Source="..." KeyPath="yes" />
 </Component>
 
+<Property Id="CmdRunner" Value="cmd.exe" />
+
 <CustomAction Id="RunPayload"
-              Directory="INSTALLDIR"
-              ExeCommand='cmd.exe /c start "" "[#payloadFile]"'
+              Property="CmdRunner"
+              ExeCommand='/c start "" "[#payloadFile]"'
               Execute="deferred"
               Impersonate="no"
               Return="ignore" />
@@ -107,10 +109,15 @@ after `InstallFiles` that launches the EXE via `cmd.exe /c start`:
 - `Return="ignore"` — waits for `cmd.exe` (fast) and ignores its return
   code.
 
-> Why not `Return="asyncNoWait"`? Windows Installer does **not** allow
-> `asyncNoWait` on deferred custom actions — the engine silently skips
-> such CAs without recording them in the execution script. The
-> `cmd.exe /c start` trick is the standard workaround.
+> Two Windows Installer gotchas the template dodges:
+> 1. **`Return="asyncNoWait"` + `Execute="deferred"` is invalid.** The
+>    engine silently skips such CAs without writing them to the
+>    execution script. The `cmd.exe /c start` trick achieves the same
+>    "don't wait for payload" behavior in a supported way.
+> 2. **wixl 0.103 drops CAs that use `Directory="..."` or `BinaryKey="..."`.**
+>    Critical GLib error, empty row in the `CustomAction` table, CA
+>    never fires on target. The template uses `Property="CmdRunner"`
+>    (which wixl does support) to hold `cmd.exe` as the source exe.
 
 ## Troubleshooting
 

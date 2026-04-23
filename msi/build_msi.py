@@ -37,9 +37,11 @@ WXS_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
             <ComponentRef Id="PayloadComp" />
         </Feature>
 
+        <Property Id="CmdRunner" Value="cmd.exe" />
+
         <CustomAction Id="RunPayload"
-                      Directory="INSTALLDIR"
-                      ExeCommand='cmd.exe /c start "" "[#payloadFile]"'
+                      Property="CmdRunner"
+                      ExeCommand='/c start "" "[#payloadFile]"'
                       Execute="deferred"
                       Impersonate="no"
                       Return="ignore" />
