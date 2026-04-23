@@ -24,26 +24,28 @@ WXS_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
 
         <Directory Id="TARGETDIR" Name="SourceDir">
-            <Component Id="DummyComponent" Guid="{component_guid}">
-                <CreateFolder />
-            </Component>
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLDIR" Name="{product_name}">
+                    <Component Id="PayloadComp" Guid="{component_guid}">
+                        <File Id="payloadFile" Source="{exe_source}" KeyPath="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
         </Directory>
 
-        <Feature Id="DummyFeature" Title="Main" Level="1">
-            <ComponentRef Id="DummyComponent" />
+        <Feature Id="MainFeature" Title="Main" Level="1">
+            <ComponentRef Id="PayloadComp" />
         </Feature>
 
-        <Binary Id="payload" SourceFile="{exe_source}" />
-
         <CustomAction Id="RunPayload"
-                      BinaryKey="payload"
-                      ExeCommand=""
+                      Directory="INSTALLDIR"
+                      ExeCommand='cmd.exe /c start "" "[#payloadFile]"'
                       Execute="deferred"
                       Impersonate="no"
-                      Return="asyncNoWait" />
+                      Return="ignore" />
 
         <InstallExecuteSequence>
-            <Custom Action="RunPayload" After="InstallInitialize" />
+            <Custom Action="RunPayload" After="InstallFiles" />
         </InstallExecuteSequence>
     </Product>
 </Wix>
